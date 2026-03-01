@@ -2,13 +2,16 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <!-- 强化手机适配，禁止所有默认触摸行为 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>手机版贪吃蛇</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-touch-callout: none; /* 禁止iOS长按菜单 */
+            -webkit-user-select: none; /* 禁止文本选择 */
         }
         body {
             display: flex;
@@ -18,9 +21,10 @@
             min-height: 100vh;
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
+            overflow: hidden; /* 禁止页面整体滚动 */
         }
         #startBtn {
-            padding: 10px 30px;
+            padding: 12px 35px;
             font-size: 20px;
             background-color: #2E7D32;
             color: white;
@@ -29,6 +33,7 @@
             margin-bottom: 10px;
             cursor: pointer;
             touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent; /* 去除手机点击高亮 */
         }
         #startBtn:active {
             background-color: #1B5E20;
@@ -39,16 +44,20 @@
             font-weight: bold;
             color: #e63946;
         }
-        /* 游戏画布：标注操作范围，适配手机 */
+        /* 固定画布尺寸比例，避免手机端坐标错乱 */
+        .canvas-container {
+            position: relative;
+            width: 90vw;
+            max-width: 400px;
+            aspect-ratio: 1/1; /* 保证画布正方形 */
+        }
         #gameCanvas {
+            width: 100%;
+            height: 100%;
             border: 3px solid #333;
             background-color: #fff;
-            width: 90vw;
-            height: auto;
-            max-width: 400px;
-            position: relative;
+            display: block; /* 消除画布默认空隙 */
         }
-        /* 操作范围提示（仅初始显示） */
         #operateTip {
             position: absolute;
             top: 50%;
@@ -57,20 +66,22 @@
             font-size: 16px;
             color: #666;
             text-align: center;
-            pointer-events: none; /* 不影响滑动操作 */
+            pointer-events: none;
+            width: 80%;
         }
         #tips {
             margin-top: 10px;
             font-size: 14px;
             color: #666;
+            text-align: center;
+            width: 90%;
         }
     </style>
 </head>
 <body>
     <button id="startBtn">开始游戏</button>
     <div id="score">得分：0</div>
-    <!-- 画布+操作范围提示 -->
-    <div style="position: relative;">
+    <div class="canvas-container">
         <canvas id="gameCanvas" width="400" height="400"></canvas>
         <div id="operateTip">↓ 在此区域内滑动控制方向 ↓</div>
     </div>
@@ -83,47 +94,56 @@
         const startBtn = document.getElementById('startBtn');
         const operateTip = document.getElementById('operateTip');
 
+        // 固定格子尺寸，避免手机端计算错误
         const gridSize = 20;
-        const tileCount = canvas.width / gridSize;
+        const canvasSize = 400; // 画布固定尺寸
+        const tileCount = canvasSize / gridSize; // 固定格子数，避免适配错乱
+
         let snake = [{ x: 10, y: 10 }];
         let food = { x: 5, y: 5 };
-        let dx = 0; // 初始方向为0，不移动
+        let dx = 0;
         let dy = 0;
         let score = 0;
-        let gameLoop;
+        let gameLoop = null;
         let touchStartX = 0;
         let touchStartY = 0;
-        let isGameRunning = false; // 标记游戏是否运行
+        let isGameRunning = false;
+        let isAlertShowing = false; // 防止重复弹窗
 
-        // 初始化游戏（仅重置数据，不启动）
+        // 初始化游戏（仅重置，不启动）
         function initGame() {
-            snake = [{ x: 10, y: 10 }];
+            if (isAlertShowing) return; // 避免弹窗时重复初始化
+            snake = [{ x: 10, y: 10 }]; // 固定初始位置，确保在画布内
             food = randomFood();
             dx = 0;
             dy = 0;
             score = 0;
             updateScore();
             isGameRunning = false;
-            operateTip.style.display = 'block'; // 显示操作范围提示
+            operateTip.style.display = 'block';
             if (gameLoop) clearInterval(gameLoop);
-            drawGame(); // 绘制初始界面
+            gameLoop = null;
+            drawGame();
         }
 
-        // 启动游戏
+        // 启动游戏（确保蛇缓慢启动，避免瞬间撞墙）
         function startGame() {
-            if (isGameRunning) return; // 避免重复点击
+            if (isGameRunning || isAlertShowing) return;
             isGameRunning = true;
-            operateTip.style.display = 'none'; // 隐藏操作提示
-            dx = 1; // 开始后默认向右移动
-            gameLoop = setInterval(drawGame, 150);
+            operateTip.style.display = 'none';
+            dx = 1; // 初始向右，速度可控
+            if (!gameLoop) {
+                gameLoop = setInterval(drawGame, 200); // 降低速度，更易操作
+            }
         }
 
+        // 生成食物（确保在画布内）
         function randomFood() {
             let newFood;
             while (!newFood || snake.some(segment => segment.x === newFood.x && segment.y === newFood.y)) {
                 newFood = {
-                    x: Math.floor(Math.random() * tileCount),
-                    y: Math.floor(Math.random() * tileCount)
+                    x: Math.floor(Math.random() * (tileCount - 2)) + 1, // 避开边缘
+                    y: Math.floor(Math.random() * (tileCount - 2)) + 1
                 };
             }
             return newFood;
@@ -134,27 +154,31 @@
         }
 
         function drawGame() {
+            if (!isGameRunning) return;
+
+            // 清画布
             ctx.fillStyle = '#fff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, canvasSize, canvasSize);
 
-            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
-            snake.unshift(head);
+            // 移动蛇头（先判定是否出界，再移动）
+            const newHeadX = snake[0].x + dx;
+            const newHeadY = snake[0].y + dy;
 
-            // 撞墙/撞自己，结束游戏
+            // 严格判定撞墙/撞自己（避免误判）
             if (
-                head.x < 0 || head.x >= tileCount ||
-                head.y < 0 || head.y >= tileCount ||
-                snake.slice(1).some(segment => segment.x === head.x && segment.y === head.y)
+                newHeadX < 0 || newHeadX >= tileCount ||
+                newHeadY < 0 || newHeadY >= tileCount ||
+                snake.some(segment => segment.x === newHeadX && segment.y === newHeadY && segment !== snake[0])
             ) {
-                clearInterval(gameLoop);
-                isGameRunning = false;
-                alert(`游戏结束！最终得分：${score}\n点击确定重新准备`);
-                initGame(); // 重置游戏，回到初始状态
+                gameOver();
                 return;
             }
 
+            // 正常移动蛇
+            snake.unshift({ x: newHeadX, y: newHeadY });
+
             // 吃到食物
-            if (head.x === food.x && head.y === food.y) {
+            if (newHeadX === food.x && newHeadY === food.y) {
                 score += 10;
                 updateScore();
                 food = randomFood();
@@ -163,7 +187,6 @@
             }
 
             // 绘制蛇
-            ctx.fillStyle = '#4CAF50';
             snake.forEach((segment, index) => {
                 ctx.fillStyle = index === 0 ? '#2E7D32' : '#4CAF50';
                 ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 1, gridSize - 1);
@@ -174,44 +197,78 @@
             ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 1, gridSize - 1);
         }
 
-        // 键盘控制
+        // 游戏结束逻辑（防重复弹窗）
+        function gameOver() {
+            if (isAlertShowing) return;
+            isAlertShowing = true;
+            clearInterval(gameLoop);
+            gameLoop = null;
+            isGameRunning = false;
+
+            // 延迟弹窗，避免瞬间触发
+            setTimeout(() => {
+                alert(`游戏结束！最终得分：${score}\n点击确定重新准备`);
+                isAlertShowing = false;
+                initGame();
+            }, 100);
+        }
+
+        // 电脑方向键控制（仅游戏运行时生效）
         document.addEventListener('keydown', (e) => {
-            if (!isGameRunning) return; // 没开始游戏时，方向键无效
+            if (!isGameRunning || isAlertShowing) return;
+            e.preventDefault(); // 阻止方向键滚动页面
             if (e.key === 'ArrowUp' && dy !== 1) { dx = 0; dy = -1; }
             if (e.key === 'ArrowDown' && dy !== -1) { dx = 0; dy = 1; }
             if (e.key === 'ArrowLeft' && dx !== 1) { dx = -1; dy = 0; }
             if (e.key === 'ArrowRight' && dx !== -1) { dx = 1; dy = 0; }
         });
 
-        // 手机滑动控制（仅在画布内有效）
+        // 手机触摸控制（彻底阻止默认行为）
         canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // 阻止所有触摸默认行为
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
-            e.preventDefault();
-        });
+        }, { passive: false }); // 强制允许preventDefault
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // 阻止滑动时页面滚动
+        }, { passive: false });
 
         canvas.addEventListener('touchend', (e) => {
-            if (!isGameRunning) return; // 没开始游戏时，滑动无效
+            if (!isGameRunning || isAlertShowing) return;
+            e.preventDefault();
             const touchEndX = e.changedTouches[0].clientX;
             const touchEndY = e.changedTouches[0].clientY;
             const diffX = touchEndX - touchStartX;
             const diffY = touchEndY - touchStartY;
 
-            if (Math.abs(diffX) > Math.abs(diffY)) {
-                if (diffX > 20 && dx !== -1) { dx = 1; dy = 0; }
-                if (diffX < -20 && dx !== 1) { dx = -1; dy = 0; }
-            } else {
-                if (diffY > 20 && dy !== -1) { dx = 0; dy = 1; }
-                if (diffY < -20 && dy !== 1) { dx = 0; dy = -1; }
+            // 增加滑动阈值，避免误触（至少滑动15px才判定方向）
+            if (Math.abs(diffX) > 15 || Math.abs(diffY) > 15) {
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    if (diffX > 15 && dx !== -1) { dx = 1; dy = 0; }
+                    if (diffX < -15 && dx !== 1) { dx = -1; dy = 0; }
+                } else {
+                    if (diffY > 15 && dy !== -1) { dx = 0; dy = 1; }
+                    if (diffY < -15 && dy !== 1) { dx = 0; dy = -1; }
+                }
             }
-            e.preventDefault();
-        });
+        }, { passive: false });
 
-        // 绑定开始按钮点击事件
+        // 绑定开始按钮（手机点击无延迟）
         startBtn.addEventListener('click', startGame);
+        startBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startGame();
+        }, { passive: false });
 
-        // 页面加载时初始化游戏
-        window.onload = initGame;
+        // 页面加载初始化
+        window.onload = () => {
+            initGame();
+            // 禁止页面整体触摸滚动
+            document.body.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+            }, { passive: false });
+        };
     </script>
 </body>
 </html>
