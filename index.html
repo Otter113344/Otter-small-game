@@ -2,13 +2,47 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <!-- 强化手机适配，禁止缩放和滚动 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>贪吃蛇</title>
     <style>
-        body{text-align:center;background:#f0f0f0;padding:20px;}
-        #start{padding:10px 20px;font-size:18px;background:green;color:white;border:none;border-radius:8px;}
-        #tip{color:red;font-size:18px;display:none;}
-        canvas{border:3px solid #333;background:white;}
+        /* 禁止页面整体滚动，占满屏幕 */
+        html, body {
+            margin: 0;
+            padding: 20px 0;
+            text-align: center;
+            background: #f0f0f0;
+            overflow: hidden; /* 核心：禁止页面滑动 */
+            height: 100%;
+            touch-action: none; /* 禁用所有触摸默认行为 */
+        }
+        #start {
+            padding: 10px 20px;
+            font-size: 18px;
+            background: green;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            touch-action: manipulation; /* 保留按钮点击行为 */
+        }
+        #tip {
+            color: red;
+            font-size: 18px;
+            display: none;
+            margin: 10px 0;
+        }
+        #score {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        /* 固定画布尺寸，避免滑动错位 */
+        #c {
+            border: 3px solid #333;
+            background: white;
+            width: 90vw;
+            max-width: 400px;
+            touch-action: none; /* 画布内禁用所有默认触摸 */
+        }
     </style>
 </head>
 <body>
@@ -18,38 +52,47 @@
     <canvas id="c" width="400" height="400"></canvas>
 
     <script>
-        const canvas=document.getElementById('c');
-        const ctx=canvas.getContext('2d');
-        const startBtn=document.getElementById('start');
-        const scoreText=document.getElementById('score');
-        const tip=document.getElementById('tip');
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('start');
+        const scoreText = document.getElementById('score');
+        const tip = document.getElementById('tip');
 
-        const g=20;
-        let snake=[{x:10,y:10}];
-        let food={x:5,y:5};
-        let dx=1,dy=0;
+        const g = 20;
+        let snake = [{x:10,y:10}];
+        let food = {x:5,y:5};
+        let dx=1, dy=0;
         let score=0;
         let run=false;
         let loop;
 
+        // 绘制游戏
         function draw(){
             ctx.fillStyle="white";
             ctx.fillRect(0,0,400,400);
+            // 绘制食物
             ctx.fillStyle="red";
             ctx.fillRect(food.x*g,food.y*g,g-1,g-1);
+            // 绘制蛇
             for(let i=0;i<snake.length;i++){
                 ctx.fillStyle=i==0?"darkgreen":"green";
                 ctx.fillRect(snake[i].x*g,snake[i].y*g,g-1,g-1);
             }
-            if(!run)return;
-            let h={x:snake[0].x+dx,y:snake[0].y+dy};
+            
+            if(!run) return;
+            
+            // 移动蛇头
+            let h = {x:snake[0].x+dx, y:snake[0].y+dy};
+            // 撞墙/撞自己判定
             if(h.x<0||h.x>=20||h.y<0||h.y>=20||snake.some(s=>s.x==h.x&&s.y==h.y)){
                 run=false;
                 tip.style.display="block";
                 clearInterval(loop);
                 return;
             }
+            
             snake.unshift(h);
+            // 吃食物加分
             if(h.x==food.x&&h.y==food.y){
                 score+=10;
                 scoreText.innerText="得分："+score;
@@ -59,10 +102,11 @@
             }
         }
 
+        // 开始游戏
         function begin(){
             snake=[{x:10,y:10}];
             food={x:5,y:5};
-            dx=1;dy=0;
+            dx=1; dy=0;
             score=0;
             scoreText.innerText="得分：0";
             tip.style.display="none";
@@ -71,31 +115,54 @@
             loop=setInterval(draw,200);
         }
 
+        // 电脑方向键控制
         document.addEventListener("keydown",e=>{
-            if(!run)return;
+            if(!run) return;
             if(e.key=="ArrowUp"&&dy!=1){dx=0;dy=-1;}
             if(e.key=="ArrowDown"&&dy!=-1){dx=0;dy=1;}
             if(e.key=="ArrowLeft"&&dx!=1){dx=-1;dy=0;}
             if(e.key=="ArrowRight"&&dx!=-1){dx=1;dy=0;}
         });
 
-        let sx=0,sy=0;
-        canvas.addEventListener("touchstart",e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;});
-        canvas.addEventListener("touchend",e=>{
-            if(!run)return;
+        // 手机滑动控制（彻底阻止默认行为）
+        let sx=0, sy=0;
+        // 触摸开始：记录位置 + 阻止默认行为
+        canvas.addEventListener("touchstart", e=>{
+            e.preventDefault(); // 禁止浏览器默认滑动
+            sx=e.touches[0].clientX;
+            sy=e.touches[0].clientY;
+        }, { passive: false }); // 强制允许阻止默认行为
+
+        // 触摸移动：彻底禁止页面滑动
+        canvas.addEventListener("touchmove", e=>{
+            e.preventDefault(); // 核心：阻止滑动时页面滚动
+        }, { passive: false });
+
+        // 触摸结束：判定滑动方向
+        canvas.addEventListener("touchend", e=>{
+            e.preventDefault(); // 禁止默认行为
+            if(!run) return;
             let x=e.changedTouches[0].clientX;
             let y=e.changedTouches[0].clientY;
+            // 判定滑动方向（只响应有效滑动）
             if(Math.abs(x-sx)>Math.abs(y-sy)){
-                if(x-sx>0&&dx!=-1) {dx=1;dy=0;}
-                else if(dx!=1) {dx=-1;dy=0;}
+                if(x-sx>10&&dx!=-1) {dx=1;dy=0;} // 右滑
+                else if(x-sx<-10&&dx!=1) {dx=-1;dy=0;} // 左滑
             }else{
-                if(y-sy>0&&dy!=-1) {dx=0;dy=1;}
-                else if(dy!=1) {dx=0;dy=-1;}
+                if(y-sy>10&&dy!=-1) {dx=0;dy=1;} // 下滑
+                else if(y-sy<-10&&dy!=1) {dx=0;dy=-1;} // 上滑
             }
-        });
+        }, { passive: false });
 
+        // 绑定开始按钮
         startBtn.onclick=begin;
+        // 初始化绘制
         draw();
+
+        // 全局阻止页面滑动（兜底）
+        document.body.addEventListener("touchmove", e=>{
+            e.preventDefault();
+        }, { passive: false });
     </script>
 </body>
 </html>
