@@ -2,75 +2,46 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>多地图贪吃蛇</title>
     <style>
-        /* 全局禁止滑动，保证手机操作仅作用于游戏 */
         html, body {
-            margin: 0;
-            padding: 20px 0;
-            text-align: center;
-            background: #f0f0f0;
-            overflow: hidden;
-            height: 100%;
-            touch-action: none;
-            font-family: Arial, sans-serif;
-        }
-        #game-info {
-            margin-bottom: 10px;
-        }
-        #tip {
-            color: red;
-            font-size: 18px;
-            display: none;
-            margin: 5px 0;
-        }
-        #score {
-            font-size: 18px;
-            margin: 5px 0;
-            font-weight: bold;
-        }
-        #map-name {
-            font-size: 16px;
-            color: #333;
-            margin: 5px 0;
+            margin:0; padding:20px 0;
+            text-align:center;
+            background:#f0f0f0;
+            overflow:hidden;
+            touch-action:none;
         }
         #start {
-            padding: 12px 25px;
-            font-size: 18px;
-            background: #2E7D32;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            touch-action: manipulation;
-            margin-bottom: 10px;
+            padding:10px 20px;
+            font-size:18px;
+            background:green;
+            color:white;
+            border:none;
+            border-radius:8px;
+            margin-bottom:10px;
         }
-        #start:active {
-            background: #1B5E20;
+        #tip {
+            color:red; font-size:18px; display:none;
         }
-        /* 游戏画布：适配手机，提升操作手感 */
-        #c {
-            border: 3px solid #333;
-            width: 90vw;
-            max-width: 400px;
-            touch-action: none;
+        #score, #map {
+            font-size:18px;
+            margin:5px 0;
         }
-        #operate-tip {
-            font-size: 14px;
-            color: #666;
-            margin-top: 10px;
+        canvas {
+            border:3px solid #333;
+            width:90vw;
+            max-width:400px;
+            touch-action:none;
         }
     </style>
 </head>
 <body>
-    <div id="game-info">
-        <div id="tip">游戏结束</div>
-        <div id="score">得分：0</div>
-        <div id="map-name">当前地图：森林（绿色）</div>
-    </div>
+    <div id="tip">游戏结束</div>
+    <div id="score">得分：0</div>
+    <div id="map">地图：森林</div>
     <button id="start">开始游戏</button><br>
     <canvas id="c" width="400" height="400"></canvas>
-    <div id="operate-tip">手机：在画布内滑动控制 | 传送口：黄色方块 → 切换地图</div>
 
     <script>
         const canvas = document.getElementById('c');
@@ -78,215 +49,177 @@
         const startBtn = document.getElementById('start');
         const scoreText = document.getElementById('score');
         const tip = document.getElementById('tip');
-        const mapNameText = document.getElementById('map-name');
+        const mapText = document.getElementById('map');
 
-        // 游戏基础配置
-        const grid = 20; // 格子大小
-        const gridCount = 20; // 格子数量（400/20）
-        let snake = [{x: 5, y: 5}]; // 初始蛇位置
-        let food = {x: 10, y: 10}; // 初始食物位置
-        let dx = 1, dy = 0; // 初始方向
-        let score = 0;
-        let isRunning = false;
-        let gameLoop;
+        const g = 20;
+        let snake = [{x:5,y:5}];
+        let food = {x:10,y:10};
+        let dx=1, dy=0;
+        let score=0;
+        let run=false;
+        let loop;
 
-        // 多地图配置（不同底色、障碍、传送口）
-        const maps = [
-            // 地图1：森林（绿色底）
-            {
-                name: "森林（绿色）",
-                bgColor: "#e8f5e9",
-                barriers: [ // 固定障碍坐标
-                    {x: 2, y: 2}, {x: 2, y: 3}, {x: 2, y: 4},
-                    {x: 6, y: 8}, {x: 7, y: 8}, {x: 8, y: 8},
-                    {x: 15, y: 15}, {x: 15, y: 16}, {x: 15, y: 17}
-                ],
-                portal: {x: 18, y: 18}, // 传送口坐标
-                exit: {x: 2, y: 18} // 另一张地图的出口位置
-            },
-            // 地图2：沙漠（黄色底）
-            {
-                name: "沙漠（黄色）",
-                bgColor: "#fff3e0",
-                barriers: [ // 不同的障碍布局
-                    {x: 10, y: 2}, {x: 11, y: 2}, {x: 12, y: 2},
-                    {x: 4, y: 12}, {x: 4, y: 13}, {x: 4, y: 14},
-                    {x: 18, y: 8}, {x: 18, y: 9}, {x: 18, y: 10}
-                ],
-                portal: {x: 2, y: 18}, // 传送口坐标（对应地图1的出口）
-                exit: {x: 18, y: 18} // 回到地图1的出口
-            }
+        // 地图1：森林（绿色）
+        let map = 1;
+        const barriers1 = [
+            {x:3,y:3},{x:3,y:4},{x:3,y:5},
+            {x:10,y:2},{x:11,y:2},{x:12,y:2},
+            {x:16,y:16},{x:16,y:17}
         ];
-        let currentMapIndex = 0; // 默认显示地图1
-        let currentMap = maps[currentMapIndex];
+        const portal1 = {x:18,y:18};
 
-        // 提升灵敏度：降低滑动阈值（5px即可触发）
-        const touchThreshold = 5;
-        let touchStartX = 0, touchStartY = 0;
+        // 地图2：沙漠（黄色）
+        const barriers2 = [
+            {x:8,y:8},{x:9,y:8},{x:10,y:8},
+            {x:2,y:12},{x:2,y:13},{x:2,y:14},
+            {x:17,y:5},{x:17,y:6}
+        ];
+        const portal2 = {x:2,y:18};
 
-        // 绘制游戏（核心逻辑）
-        function drawGame() {
-            // 绘制地图底色
-            ctx.fillStyle = currentMap.bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        let barriers = barriers1;
+        let portal = portal1;
 
-            // 绘制障碍（灰色方块）
-            ctx.fillStyle = "#757575";
-            currentMap.barriers.forEach(bar => {
-                ctx.fillRect(bar.x * grid, bar.y * grid, grid - 1, grid - 1);
+        // 生成食物
+        function makeFood() {
+            let f;
+            do {
+                f = {x:Math.floor(Math.random()*20), y:Math.floor(Math.random()*20)};
+            } while (
+                snake.some(s=>s.x==f.x&&s.y==f.y) ||
+                barriers.some(b=>b.x==f.x&&b.y==f.y) ||
+                (f.x==portal.x&&f.y==portal.y)
+            );
+            food = f;
+        }
+
+        // 画图
+        function draw() {
+            // 地图底色
+            if(map==1){
+                ctx.fillStyle="#e8f5e9"; // 森林绿
+                mapText.innerText="地图：森林";
+            }else{
+                ctx.fillStyle="#fff3e0"; // 沙漠黄
+                mapText.innerText="地图：沙漠";
+            }
+            ctx.fillRect(0,0,400,400);
+
+            // 障碍：灰色
+            ctx.fillStyle="#757575";
+            barriers.forEach(b=>{
+                ctx.fillRect(b.x*g, b.y*g, g-1, g-1);
             });
 
-            // 绘制传送口（黄色方块）
-            ctx.fillStyle = "#ffc107";
-            ctx.fillRect(currentMap.portal.x * grid, currentMap.portal.y * grid, grid - 1, grid - 1);
+            // 传送门：黄色
+            ctx.fillStyle="#ffc107";
+            ctx.fillRect(portal.x*g, portal.y*g, g-1, g-1);
 
-            // 绘制食物（红色）
-            ctx.fillStyle = "#f44336";
-            ctx.fillRect(food.x * grid, food.y * grid, grid - 1, grid - 1);
+            // 食物：红色
+            ctx.fillStyle="red";
+            ctx.fillRect(food.x*g, food.y*g, g-1, g-1);
 
-            // 绘制蛇（深绿=头，浅绿=身体）
-            snake.forEach((segment, idx) => {
-                ctx.fillStyle = idx === 0 ? "#1B5E20" : "#4CAF50";
-                ctx.fillRect(segment.x * grid, segment.y * grid, grid - 1, grid - 1);
+            // 蛇
+            snake.forEach((s,i)=>{
+                ctx.fillStyle=i==0?"darkgreen":"green";
+                ctx.fillRect(s.x*g, s.y*g, g-1, g-1);
             });
 
-            if (!isRunning) return;
+            if(!run)return;
 
-            // 移动蛇头
-            const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+            let head = {x:snake[0].x+dx, y:snake[0].y+dy};
 
-            // 碰撞判定：撞墙/撞自己/撞障碍
-            const isHitWall = head.x < 0 || head.x >= gridCount || head.y < 0 || head.y >= gridCount;
-            const isHitSelf = snake.some(s => s.x === head.x && s.y === head.y);
-            const isHitBarrier = currentMap.barriers.some(bar => bar.x === head.x && bar.y === head.y);
-
-            if (isHitWall || isHitSelf || isHitBarrier) {
-                stopGame();
+            // 撞墙/撞自己/撞障碍
+            if(
+                head.x<0||head.x>=20||head.y<0||head.y>=20 ||
+                snake.some(s=>s.x==head.x&&s.y==head.y) ||
+                barriers.some(b=>b.x==head.x&&b.y==head.y)
+            ){
+                run=false;
+                tip.style.display="block";
+                clearInterval(loop);
                 return;
             }
 
-            // 传送口判定：切换地图
-            if (head.x === currentMap.portal.x && head.y === currentMap.portal.y) {
-                switchMap();
-                // 切换地图后，蛇出现在另一张地图的出口
-                snake[0].x = currentMap.exit.x;
-                snake[0].y = currentMap.exit.y;
-                // 重新生成食物（避免在障碍/传送口上）
-                generateFood();
-                return; // 跳过本次移动逻辑
+            // 进传送门 → 切换地图
+            if(head.x==portal.x&&head.y==portal.y){
+                if(map==1){
+                    map=2;
+                    barriers=barriers2;
+                    portal=portal2;
+                    head.x=2; head.y=18;
+                }else{
+                    map=1;
+                    barriers=barriers1;
+                    portal=portal1;
+                    head.x=18; head.y=18;
+                }
+                makeFood();
             }
 
-            // 正常移动蛇
             snake.unshift(head);
 
-            // 吃食物加分
-            if (head.x === food.x && head.y === food.y) {
-                score += 10;
-                scoreText.textContent = `得分：${score}`;
-                generateFood(); // 重新生成食物
-            } else {
-                snake.pop(); // 没吃到食物，蛇尾跟进
+            // 吃食物
+            if(head.x==food.x&&head.y==food.y){
+                score+=10;
+                scoreText.innerText="得分："+score;
+                makeFood();
+            }else{
+                snake.pop();
             }
         }
 
-        // 切换地图
-        function switchMap() {
-            currentMapIndex = currentMapIndex === 0 ? 1 : 0;
-            currentMap = maps[currentMapIndex];
-            mapNameText.textContent = `当前地图：${currentMap.name}`;
+        // 开始
+        function start(){
+            map=1; barriers=barriers1; portal=portal1;
+            snake=[{x:5,y:5}];
+            dx=1; dy=0;
+            score=0;
+            scoreText.innerText="得分：0";
+            tip.style.display="none";
+            run=true;
+            makeFood();
+            clearInterval(loop);
+            loop=setInterval(draw,200);
         }
 
-        // 生成食物（避开蛇、障碍、传送口）
-        function generateFood() {
-            let newFood;
-            // 确保食物不在蛇、障碍、传送口上
-            while (!newFood || 
-                   snake.some(s => s.x === newFood.x && s.y === newFood.y) ||
-                   currentMap.barriers.some(bar => bar.x === newFood.x && bar.y === newFood.y) ||
-                   (newFood.x === currentMap.portal.x && newFood.y === currentMap.portal.y)) {
-                newFood = {
-                    x: Math.floor(Math.random() * gridCount),
-                    y: Math.floor(Math.random() * gridCount)
-                };
-            }
-            food = newFood;
-        }
-
-        // 开始游戏
-        function startGame() {
-            // 重置游戏状态
-            snake = [{x: 5, y: 5}];
-            currentMapIndex = 0;
-            currentMap = maps[currentMapIndex];
-            mapNameText.textContent = `当前地图：${currentMap.name}`;
-            dx = 1;
-            dy = 0;
-            score = 0;
-            scoreText.textContent = "得分：0";
-            tip.style.display = "none";
-            isRunning = true;
-            generateFood();
-
-            // 启动游戏循环（帧率200ms，流畅且易操作）
-            clearInterval(gameLoop);
-            gameLoop = setInterval(drawGame, 200);
-        }
-
-        // 结束游戏
-        function stopGame() {
-            isRunning = false;
-            clearInterval(gameLoop);
-            tip.style.display = "block";
-        }
-
-        // 电脑方向键控制
-        document.addEventListener("keydown", e => {
-            if (!isRunning) return;
-            if (e.key === "ArrowUp" && dy !== 1) { dx = 0; dy = -1; }
-            if (e.key === "ArrowDown" && dy !== -1) { dx = 0; dy = 1; }
-            if (e.key === "ArrowLeft" && dx !== 1) { dx = -1; dy = 0; }
-            if (e.key === "ArrowRight" && dx !== -1) { dx = 1; dy = 0; }
+        // 电脑按键
+        document.addEventListener("keydown",e=>{
+            if(!run)return;
+            if(e.key=="ArrowUp"&&dy!=1) {dx=0; dy=-1;}
+            if(e.key=="ArrowDown"&&dy!=-1) {dx=0; dy=1;}
+            if(e.key=="ArrowLeft"&&dx!=1) {dx=-1; dy=0;}
+            if(e.key=="ArrowRight"&&dx!=-1) {dx=1; dy=0;}
         });
 
-        // 手机滑动控制（高灵敏度）
-        canvas.addEventListener("touchstart", e => {
+        // 手机滑动（灵敏）
+        let sx=0,sy=0;
+        canvas.addEventListener("touchstart",e=>{
             e.preventDefault();
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
-        }, { passive: false });
+            sx=e.touches[0].clientX;
+            sy=e.touches[0].clientY;
+        },{passive:false});
 
-        canvas.addEventListener("touchmove", e => {
-            e.preventDefault(); // 彻底禁止页面滑动
-        }, { passive: false });
-
-        canvas.addEventListener("touchend", e => {
+        canvas.addEventListener("touchmove",e=>{
             e.preventDefault();
-            if (!isRunning) return;
+        },{passive:false});
 
-            const touchEndX = e.changedTouches[0].clientX;
-            const touchEndY = e.changedTouches[0].clientY;
-            const diffX = touchEndX - touchStartX;
-            const diffY = touchEndY - touchStartY;
+        canvas.addEventListener("touchend",e=>{
+            if(!run)return;
+            let x=e.changedTouches[0].clientX;
+            let y=e.changedTouches[0].clientY;
+            let dxm=x-sx, dym=y-sy;
 
-            // 高灵敏度判定：只要滑动超过5px就触发
-            if (Math.abs(diffX) > Math.abs(diffY)) {
-                if (diffX > touchThreshold && dx !== -1) { dx = 1; dy = 0; } // 右滑
-                else if (diffX < -touchThreshold && dx !== 1) { dx = -1; dy = 0; } // 左滑
-            } else {
-                if (diffY > touchThreshold && dy !== -1) { dx = 0; dy = 1; } // 下滑
-                else if (diffY < -touchThreshold && dy !== 1) { dx = 0; dy = -1; } // 上滑
+            if(Math.abs(dxm)>Math.abs(dym)){
+                if(dxm>0&&dx!=-1) {dx=1; dy=0;}
+                else if(dxm<0&&dx!=1) {dx=-1; dy=0;}
+            }else{
+                if(dym>0&&dy!=-1) {dx=0; dy=1;}
+                else if(dym<0&&dy!=1) {dx=0; dy=-1;}
             }
-        }, { passive: false });
+        },{passive:false});
 
-        // 绑定开始按钮
-        startBtn.addEventListener("click", startGame);
-        // 初始化绘制
-        drawGame();
-
-        // 全局兜底：禁止页面滑动
-        document.body.addEventListener("touchmove", e => {
-            e.preventDefault();
-        }, { passive: false });
+        startBtn.onclick=start;
+        draw();
     </script>
 </body>
 </html>
